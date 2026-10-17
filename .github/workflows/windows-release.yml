@@ -1,0 +1,113 @@
+name: Windows portable build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build and package Windows x64
+    runs-on: windows-2022
+    outputs:
+      package_name: ${{ steps.package-version.outputs.name }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6.12 with Bluetooth support
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.12.0'
+          arch: win64_msvc2022_64
+          modules: qtconnectivity
+          cache: true
+
+      - name: Determine package version
+        id: package-version
+        shell: pwsh
+        run: |
+          $match = Select-String -Path CMakeLists.txt -Pattern '^project\(PokePointer VERSION ([0-9]+\.[0-9]+\.[0-9]+)' | Select-Object -First 1
+          if (-not $match) { throw 'Cannot determine PokePointer version from CMakeLists.txt.' }
+          $version = $match.Matches[0].Groups[1].Value
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Git tag $env:GITHUB_REF_NAME does not match CMake project version v$version."
+          }
+          $packageName = "PokePointer-v$version-windows-x64"
+          "name=$packageName" >> $env:GITHUB_OUTPUT
+
+      - name: Configure with MSVC
+        shell: pwsh
+        run: |
+          cmake -S . -B build-ci -G 'Visual Studio 17 2022' -A x64 "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR" -DBUILD_TESTING=ON
+
+      - name: Compile Release
+        shell: pwsh
+        run: cmake --build build-ci --config Release --parallel
+
+      - name: Run automated tests
+        shell: pwsh
+        run: ctest --test-dir build-ci -C Release --output-on-failure
+
+      - name: Install executable and deploy Qt
+        shell: pwsh
+        env:
+          PACKAGE_NAME: ${{ steps.package-version.outputs.name }}
+        run: |
+          $destination = Join-Path $PWD "dist/$env:PACKAGE_NAME"
+          cmake --install build-ci --config Release --prefix "$destination"
+          if ($LASTEXITCODE -ne 0) { throw 'CMake installation or Qt deployment failed.' }
+          foreach ($relativePath in @('Start-PokePointer.bat', 'bin/pokepointer.exe', 'bin/Qt6Core.dll', 'bin/Qt6Bluetooth.dll')) {
+            $fullPath = Join-Path $destination $relativePath
+            if (-not (Test-Path $fullPath)) { throw "Missing deployed file: $relativePath" }
+          }
+          & (Join-Path $destination 'bin/pokepointer.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw 'The deployed executable failed its version smoke test.' }
+
+      - name: Create distributable ZIP
+        shell: pwsh
+        env:
+          PACKAGE_NAME: ${{ steps.package-version.outputs.name }}
+        run: |
+          Compress-Archive -Path "dist/$env:PACKAGE_NAME" -DestinationPath "dist/$env:PACKAGE_NAME.zip" -CompressionLevel Optimal
+          if (-not (Test-Path "dist/$env:PACKAGE_NAME.zip")) { throw 'ZIP creation failed.' }
+
+      - name: Upload downloadable build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package-version.outputs.name }}
+          path: dist/${{ steps.package-version.outputs.name }}.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release:
+    name: Publish tagged GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download tested Windows ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-windows.outputs.package_name }}
+          path: dist
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          PACKAGE_NAME: ${{ needs.build-windows.outputs.package_name }}
+        run: |
+          gh release create "$RELEASE_TAG" "dist/$PACKAGE_NAME.zip" \
+            --verify-tag \
+            --title "PokePointer $RELEASE_TAG" \
+            --generate-notes
