@@ -1,13 +1,10 @@
 <div align="center">
-  <img width="900" height="300" alt="PokePointer Logo with Cursor" src="https://github.com/user-attachments/assets/74a23716-7ebf-4f50-838d-62b1030fb7f8" />
+  <img width="650" alt="PokePointer Logo with Cursor" src="https://github.com/user-attachments/assets/74a23716-7ebf-4f50-838d-62b1030fb7f8" />
   <br />
   <p>
     <img src="https://img.shields.io/github/last-commit/javiiervm/PokePointer" alt="Last Commit" />
     <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform" />
     <img src="https://img.shields.io/badge/C%2B%2B-20-blue" alt="C++ Version" />
-    <img src="https://img.shields.io/badge/Qt-6-41CD52" alt="Qt Version" />
-    <img src="https://img.shields.io/badge/build-CMake-064F8C" alt="Build System" />
-    <img src="https://img.shields.io/badge/connectivity-Bluetooth%20LE-purple" alt="Connectivity" />
     <img src="https://img.shields.io/github/issues/javiiervm/PokePointer" alt="Issues" />
     <img src="https://img.shields.io/github/stars/javiiervm/PokePointer" alt="Stars" />
   </p>
