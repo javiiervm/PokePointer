@@ -26,7 +26,7 @@ PokePointer is a C++20 / Qt 6 application that uses a Nintendo Poké Ball Plus a
 - **Mouse safety:** initial center calibration, radial deadzone, speed curve, 500 ms input watchdog, button release on input invalidation and shutdown, and movement timer stopped at rest.
 - Qt-free tests for protocol/lifecycle/pointer mapping plus Qt offline and CLI tests.
 
-BLE discovery, GATT inspection, joystick decoding, mouse movement, left/right clicks, dragging, and the scrolling gesture were successfully tried with a physical Poké Ball Plus on Windows 11 on 2026-10-17. The seven tests also passed in the MSVC Release build before this version bump. **The standalone distribution, recovery from unexpected Bluetooth loss, 15+ minute idle operation, and elevated-app behavior have not yet been verified.** No proprietary keep-alive has been established. See [protocol evidence](docs/protocol.md) and [mouse validation](docs/mouse.md).
+BLE discovery, GATT inspection, joystick decoding, mouse movement, left/right clicks, dragging, and the scrolling gesture were successfully tried with a physical Poké Ball Plus on Windows 11 on 2026-10-17. Seven tests passed in the MSVC Release build. **Recovery from unexpected Bluetooth loss, 15+ minute idle operation, elevated-app behavior, and the updated CI-built standalone distribution still require validation.** No proprietary keep-alive has been established. See [protocol evidence](docs/protocol.md) and [mouse validation](docs/mouse.md).
 
 ## Build on Windows
 
@@ -91,7 +91,7 @@ Selection is saved under Qt's `AppConfigLocation` (normally `%LOCALAPPDATA%\Poke
 
 ## Windows portable distribution
 
-Run CMake's standard install/deploy step **after building and testing Release**. This automatically generates a versioned `Start-PokePointer.bat` and collects the necessary Qt libraries and plugins using Qt's deployment support (`qt_generate_deploy_app_script` / `windeployqt`). Do not copy only the executable from `build-msvc/Release`; it requires Qt DLLs.
+After building and testing **Release**, use CMake's install step to stage the Windows package. PokePointer currently uses **Qt Core and Qt Bluetooth only**, with no Qt GUI/QML modules or runtime Qt plugins. CMake therefore copies the release DLLs directly from the imported `Qt6::Core` and `Qt6::Bluetooth` targets, instead of invoking `windeployqt`. This avoids an observed `windeployqt` stall on GitHub Actions, while keeping the deployment small. If new Qt modules or plugins are introduced, update the deployment list and revalidate the package.
 
 From Warp / Git Bash on the developer machine:
 
@@ -104,7 +104,7 @@ ctest --test-dir build-msvc -C Release --output-on-failure
 cmake --install build-msvc --config Release --prefix "$(cygpath -m "$PWD/dist/PokePointer-v1.0.0-windows-x64")"
 ```
 
-The installed directory has the following structure:
+The staged folder has this structure:
 
 ```text
 PokePointer-v1.0.0-windows-x64/
@@ -115,19 +115,20 @@ PokePointer-v1.0.0-windows-x64/
     pokepointer.exe
     Qt6Core.dll
     Qt6Bluetooth.dll
-    ... (other Qt DLLs and plugins copied by deployment)
 ```
 
 Double-click `Start-PokePointer.bat` to run `bin/pokepointer.exe --mouse`. The batch launcher works regardless of the installation directory and shows the exit code if the program fails. `Ctrl+C` in the console requests an orderly shutdown. **Closing the window with X is not currently guaranteed to be orderly**: the Windows console handler only handles Ctrl+C/Ctrl+Break. Avoid closing it with X while dragging until close-event handling is implemented and tested.
 
-Once the staged folder works, create the archive from inside `dist`:
+The `.github/workflows/windows-release.yml` workflow builds Release with MSVC, runs seven tests, stages the same distribution, checks for both Qt DLLs, and runs `pokepointer.exe --version` without the Qt development `bin` folder on `PATH`. A successful workflow run uploads a downloadable ZIP artifact. Tagged builds can publish the ZIP as a GitHub Release; do not tag until the package is verified.
+
+To create the archive locally, run from the repository root:
 
 ```bash
 cd dist
 cmake -E tar cf PokePointer-v1.0.0-windows-x64.zip --format=zip PokePointer-v1.0.0-windows-x64
 ```
 
-`NO_COMPILER_RUNTIME` intentionally omits compiler runtime copies; a user may need to install the **official Microsoft Visual C++ Redistributable x64**. Test on Windows with no Qt kit and with the Qt development `bin` directory absent from `PATH`; verify the batch file and all gestures. Review Qt license notice and redistribution obligations before publishing. The repo has not yet selected an application license.
+Compiler runtime DLLs are deliberately not copied. End users might need the **official Microsoft Visual C++ Redistributable x64**. Test the package on Windows without Qt installed (and without its `bin` directory on `PATH`) and verify Bluetooth and all mouse gestures. Review Qt's licensing notices and redistribution obligations before publishing. The repository has not yet selected an application license.
 
 ## Project map
 
@@ -146,6 +147,6 @@ cmake -E tar cf PokePointer-v1.0.0-windows-x64.zip --format=zip PokePointer-v1.0
 
 ## Next milestone
 
-Validate the portable Windows distribution on a machine without Qt installed, including all input gestures. Follow up with deliberate Bluetooth disconnection/reconnection, 15+ minute idle testing, and checks in elevated applications. Possible later improvements include configurable sensitivity and button mappings and Linux/Android backends. Gyroscope control is deferred.
+Validate the CI-built Windows ZIP without Qt installed, including all input gestures. Follow up with deliberate Bluetooth disconnection/reconnection, 15+ minute idle testing, and checks in elevated applications. Possible later improvements include configurable sensitivity and button mappings and Linux/Android backends. Gyroscope control is deferred.
 
 No project license has been selected. Dependency licenses remain their owners' terms.

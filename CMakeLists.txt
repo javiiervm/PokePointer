@@ -48,26 +48,33 @@ if(POKEPOINTER_BUILD_APP)
     add_executable(pokepointer src/main.cpp)
     target_link_libraries(pokepointer PRIVATE pokepointer_runtime)
     pokepointer_warnings(pokepointer)
-    # Stage a portable Windows distribution using Qt's own deployment support.
-    # This is a separate install step; regular builds remain free of copied DLLs.
+
+    # Windows packaging is a separate Release install step. This console-only
+    # application uses Qt Core and Bluetooth; it has no Qt GUI/QML plugins.
+    # Copy the imported release DLLs directly instead of invoking windeployqt,
+    # which stalled during Qt6Core.dll deployment on GitHub Actions.
+    # Revisit this list if other Qt modules or runtime plugins are introduced.
     if(WIN32)
         include(GNUInstallDirs)
         configure_file(
             "${CMAKE_CURRENT_SOURCE_DIR}/packaging/Start-PokePointer.bat.in"
             "${CMAKE_CURRENT_BINARY_DIR}/Start-PokePointer.bat"
             @ONLY NEWLINE_STYLE CRLF)
-        install(TARGETS pokepointer RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+        install(TARGETS pokepointer
+            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+            CONFIGURATIONS Release)
+        install(FILES
+            "$<TARGET_FILE:Qt6::Core>"
+            "$<TARGET_FILE:Qt6::Bluetooth>"
+            DESTINATION "${CMAKE_INSTALL_BINDIR}"
+            CONFIGURATIONS Release)
         install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Start-PokePointer.bat"
                       "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
-                DESTINATION ".")
+                DESTINATION "."
+                CONFIGURATIONS Release)
         install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/mouse.md"
-                DESTINATION "docs")
-        qt_generate_deploy_app_script(
-            TARGET pokepointer
-            OUTPUT_SCRIPT pokepointer_deploy_script
-            NO_TRANSLATIONS
-            NO_COMPILER_RUNTIME)
-        install(SCRIPT "${pokepointer_deploy_script}")
+                DESTINATION "docs"
+                CONFIGURATIONS Release)
     endif()
 
     if(BUILD_TESTING)

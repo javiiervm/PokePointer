@@ -15,6 +15,7 @@ jobs:
   build-windows:
     name: Build and package Windows x64
     runs-on: windows-2022
+    timeout-minutes: 25
     outputs:
       package_name: ${{ steps.package-version.outputs.name }}
     steps:
@@ -28,8 +29,8 @@ jobs:
           arch: win64_msvc2022_64
           modules: qtconnectivity
           cache: true
-          # Qt 6.11+ uses a new download repository layout, fixed by aqtinstall PR #1000.
-          # Pin the upstream merge commit until that fix is included in a tagged release.
+          # Qt 6.11+ requires support for the new Windows package layout.
+          # Keep the upstream fix pinned until it ships in a tagged release.
           aqtsource: git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b
 
       - name: Determine package version
@@ -58,20 +59,36 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build-ci -C Release --output-on-failure
 
-      - name: Install executable and deploy Qt
+      - name: Stage portable executable and Qt runtime
         shell: pwsh
+        timeout-minutes: 5
         env:
           PACKAGE_NAME: ${{ steps.package-version.outputs.name }}
         run: |
           $destination = Join-Path $PWD "dist/$env:PACKAGE_NAME"
           cmake --install build-ci --config Release --prefix "$destination"
-          if ($LASTEXITCODE -ne 0) { throw 'CMake installation or Qt deployment failed.' }
+          if ($LASTEXITCODE -ne 0) { throw 'CMake installation failed.' }
+
           foreach ($relativePath in @('Start-PokePointer.bat', 'bin/pokepointer.exe', 'bin/Qt6Core.dll', 'bin/Qt6Bluetooth.dll')) {
             $fullPath = Join-Path $destination $relativePath
-            if (-not (Test-Path $fullPath)) { throw "Missing deployed file: $relativePath" }
+            if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+              throw "Missing deployed file: $relativePath"
+            }
           }
-          & (Join-Path $destination 'bin/pokepointer.exe') --version
-          if ($LASTEXITCODE -ne 0) { throw 'The deployed executable failed its version smoke test.' }
+
+          # Check that the installed executable does not rely on Qt's development PATH.
+          $qtBin = (Join-Path $env:QT_ROOT_DIR 'bin').TrimEnd('\')
+          $env:PATH = (($env:PATH -split ';') | Where-Object { $_.TrimEnd('\') -ine $qtBin }) -join ';'
+          Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
+          $executable = Join-Path $destination 'bin/pokepointer.exe'
+          $versionText = & $executable --version 2>&1
+          if ($LASTEXITCODE -ne 0) { throw 'Portable executable failed without Qt on PATH.' }
+          $versionText | Out-Host
+          $expectedVersion = $env:PACKAGE_NAME -replace '^PokePointer-v([0-9]+\.[0-9]+\.[0-9]+)-windows-x64$', '$1'
+          if (($versionText | Out-String) -notmatch [regex]::Escape($expectedVersion)) {
+            throw "Deployed executable did not report version $expectedVersion."
+          }
+          Write-Host 'Portable smoke test passed without the Qt development bin directory on PATH.'
 
       - name: Create distributable ZIP
         shell: pwsh
