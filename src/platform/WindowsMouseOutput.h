@@ -8,6 +8,7 @@ public:
     ~WindowsMouseOutput() override;
     void moveRelative(int dx, int dy) override;
     void setButtons(bool leftHeld, bool rightHeld) override;
+    void scrollVertical(int wheelDelta) override;
     void releaseAll() noexcept override;
 
 private:

@@ -1,41 +1,57 @@
-# Phase 2: Windows native mouse prototype
+# Phase 2: Windows mouse and wheel control
 
-This opt-in prototype converts the existing verified Pokeball Plus input reports into native Windows relative mouse events with `SendInput`. It is not an HID driver and does not register an autostart process.
+PokePointer 0.3 adds wheel events to the opt-in native Windows mouse prototype. It uses Win32 `SendInput`, not an HID driver, background service, or startup entry. PokePointer 0.2 cursor movement, both buttons, and a clean shutdown were physically demonstrated on 2026-10-17. The 0.3 scrolling gesture needs on-device validation.
 
 ## Usage
 
 1. Build with MSVC 2022 and Qt 6 Core/Bluetooth as described in README.md.
-2. Wake the Poke Ball Plus. Close other applications connected to it.
-3. From the project root, start `./build-msvc/Debug/pokepointer.exe --mouse` in Git Bash.
-4. Keep the joystick centered and both buttons released until the `Mouse calibrated` message appears. Calibration requires twelve consecutive input samples within five units of the first sample.
-5. Test movement over an empty desktop area; the top button maps to left mouse and the joystick press to right mouse. Holding a button permits dragging.
-6. Stop with Ctrl+C. Diagnostics-only mode remains the default without `--mouse`.
+2. Wake the Poke Ball Plus and close other software using its Bluetooth connection.
+3. In Warp/Git Bash run `./build-msvc/Debug/pokepointer.exe --mouse`.
+4. Leave the joystick centered and both buttons released until `Mouse calibrated` appears; calibration uses twelve consecutive stable input reports.
+5. Test movement, short left click, short double click, long-press dragging, right click, and finally scrolling on a page.
+6. Press `Ctrl+C` in the terminal to stop; normal diagnostics remain the default without `--mouse`.
 
-For diagnostics, run with `--mouse --debug-raw`. `--mouse` cannot be used with `--scan` or `--inspect-gatt`.
+## Mapping and gesture timing
 
-## Design
+| Action | Poké Ball Plus control |
+| --- | --- |
+| Move cursor | Tilt joystick |
+| Left click | Quickly press and release top once (tap) |
+| Double click | Tap top twice quickly |
+| Drag | Hold top from the **first** press, then tilt joystick |
+| Right click | Press joystick inward |
+| Scroll up/down | Tap top once, tap it again within 320 ms, **hold the second press for 300 ms**, tilt joystick up/down; release top to exit |
 
-- `core/PointerMotion.h`: Qt-free per-session center calibration, radial deadzone of 0.14 in normalized axis units, nonlinear speed scaling, subpixel carry and 50 ms maximum integration timestep. Approximate observed ranges on 2026-10-17 were X=42..191 and Y=41..180, with center near (118,114). Those observations inform initial axis scales; each new session still calibrates its center.
-- `platform/WindowsMouseOutput.*`: uses Win32 `SendInput` relative mouse moves and button-level transitions. Repeated `held` reports do not generate repeated presses.
-- `app/Application.*`: connects the packet decoder to the pointer mapper, drives a 16 ms timer only while moving, and releases injected button levels on disconnect, invalid report, Ctrl+C, shutdown or 500 ms without decoded reports. Initial calibration repeats after input invalidation.
-- `--mouse` is opt-in; other modes retain their existing behavior.
+- A first short top tap is **delayed by at most approximately 320 ms** while the app waits for a possible second tap. This is a trade-off for avoiding unintended clicks during the scroll gesture.
+- On an ordinary first press, the left mouse button is held after 170 ms; moving the joystick then drags windows. The stick button remains an independent right-click button.
+- A second press suppresses cursor movement while it is being interpreted. A short second press results in two clicks (standard double click). A held second press activates scrolling and **generates neither click nor drag**. During scroll, the X axis is ignored and the Y axis emits vertical wheel notches.
+- Scroll is generated via native `MOUSEEVENTF_WHEEL` events in standard 120-unit steps, up to approximately ten steps per second at maximum deflection. A deadzone avoids accidental scrolling at rest.
+- The app uses one active 16 ms timer for cursor motion, gesture deadlines, or scrolling; it stops at rest. No extra worker threads, services or dependencies were added.
+- `--mouse --debug-raw` remains available. `--mouse` cannot be combined with `--scan` or `--inspect-gatt`.
 
-Windows pointer speed/acceleration settings can affect physical pointer movement. Injected input may be blocked for elevated or secure desktops. This is not tested yet; do not treat software tests as hardware certification. There are no proprietary initialization or keep-alive writes.
+## Safety and implementation
 
-## Manual test checklist (pending)
+- `core/PointerMotion.h` remains unchanged from PokePointer 0.2: session center calibration, radial deadzone, nonlinear pointer speed and capped integration step.
+- `core/TopButtonGesture.h` is a Qt-free state machine for deferred single clicks, ordinary held dragging, double clicks, and double-tap-hold scrolling. A disconnect or invalid input resets it, discarding pending taps rather than injecting them later.
+- `core/ScrollMotion.h` maps the calibrated Y displacement into wheel notches, independently of cursor motion.
+- `platform/MouseOutput.h` adds a `scrollVertical` interface, implemented by `platform/WindowsMouseOutput.cpp` through native Windows `SendInput`.
+- `app/Application.cpp` stops cursor movement immediately when the second tap begins, switches to wheel events after 300 ms, and releases mouse buttons on shutdown, BLE invalidation, unknown report, or 500 ms without valid input. A watchdog-triggered reset also forces fresh calibration.
 
-- Run `ctest --test-dir build-msvc -C Debug --output-on-failure`; ensure pointer and existing tests pass.
-- Start without `--mouse`: confirm no cursor movement or mouse clicks.
-- Start with `--mouse` and leave the joystick centered for calibration; confirm a stationary cursor for 30 seconds.
-- Move slowly and fully left/right/up/down, then diagonally. Verify directions, speed scaling and smooth return to rest.
-- Press and release the top button: exactly one left-button down and up.
-- Press and release the joystick: exactly one right-button down and up.
-- Hold the top button and move the joystick: drag an ordinary desktop window; release and ensure dragging stops.
-- Hold both buttons and release one at a time; verify independent button states.
-- Disconnect Bluetooth while holding a button: verify the injected button releases within 500 ms of the last valid report, then observe recovery.
-- Re-enable Bluetooth and wake the controller. Verify a fresh connection, fresh center calibration and resumed controls.
-- Press Ctrl+C while holding a mouse button. Verify the button releases and the process exits cleanly.
-- Leave the controller untouched for at least 15 minutes, then verify controls respond and note any sleep/silence/reconnect behavior.
-- Confirm lack of extra background processes or autostart entries.
+As in PokePointer 0.2, input injection can be blocked on elevated or secure desktops by Windows protections. There are no proprietary controller writes or keep-alive commands.
 
-If any Windows `SendInput` call is rejected, investigate privileges and pointer settings; do not work around secure-desktop restrictions.
+## Manual validation on Windows (pending for v0.3)
+
+1. Build with MSVC; run `ctest --test-dir build-msvc -C Debug --output-on-failure` and confirm all seven tests pass.
+2. Start without `--mouse`: ensure diagnostics work and the cursor is unchanged.
+3. Start with `--mouse`; calibrate with the joystick untouched, then test all four movement directions and no drift at rest.
+4. Tap top once over a safe target. Confirm exactly one click, despite the brief recognition delay.
+5. Tap top twice quickly. Confirm a double click (such as selecting a word) and no scroll.
+6. Hold top on its first press for at least 170 ms and drag a window. Verify releasing it ends the drag.
+7. Hover over a scrollable web page. Tap and release top briefly, press it again within 320 ms and **keep the second press held for at least 300 ms**. Move joystick down, then up. Verify the page scrolls both ways, the pointer stays still and there is no text selection, drag, or unintended click. Release top and verify pointer movement resumes.
+8. Test releasing the second press before 300 ms; it must act as a double click rather than entering scroll mode.
+9. Press the joystick for a right click and verify it still works independently.
+10. Disconnect the controller during a drag or scroll: events must stop within 500 ms, held buttons must release, and pending clicks must be discarded. Reconnect and verify recalibration.
+11. Stop with `Ctrl+C` while holding the button, then check that no click remains held.
+12. Later, check 15-minute idle stability and auto-reconnection.
+
+Check the actual scroll rate in browser and Windows Explorer before calling this mapping final; adjustment may be needed for different apps.

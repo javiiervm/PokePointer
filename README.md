@@ -10,7 +10,7 @@
   </p>
 </div>
 
-PokePointer is a C++20 / Qt 6 CLI application for using a Nintendo Poke Ball Plus as a wireless mouse. **Phase 2 introduces an opt-in Windows mouse prototype via `--mouse`.** BLE diagnostics remain the default behavior. Windows 11 x64 is the first target; Linux and Android remain future validation targets.
+PokePointer is a C++20 / Qt 6 CLI application for using a Nintendo Poke Ball Plus as a wireless mouse. **PokePointer 0.3 adds vertical wheel scrolling to the opt-in Windows mouse prototype via `--mouse`.** BLE diagnostics remain the default behavior. Windows 11 x64 is the first target; Linux and Android remain future validation targets.
 
 ## Implemented
 
@@ -22,11 +22,11 @@ PokePointer is a C++20 / Qt 6 CLI application for using a Nintendo Poke Ball Plu
 - Operation deadlines, reconnect backoff (1, 2, 4, 8, 16, then 30 seconds), and fresh discovery on retry.
 - Persistent selection in a local application settings file; `--forget-device` clears it.
 - Ctrl+C / Ctrl+Break shutdown on Windows; SIGINT / SIGTERM handling on Unix.
-- **Opt-in Windows mouse output:** joystick moves the cursor, top button holds the left mouse button, joystick press holds the right mouse button. Native held levels allow dragging.
+- **Opt-in Windows mouse output:** joystick moves the cursor, a short top press performs a left click, holding top performs left-button dragging, and pressing the joystick performs a right click. Double-tap-and-hold top activates vertical scroll with the joystick.
 - **Mouse safety:** initial center calibration, radial deadzone, speed curve, 500 ms input watchdog, button release on input invalidation and shutdown, and movement timer stopped at rest.
 - Qt-free tests for protocol/lifecycle/pointer mapping plus Qt offline and CLI tests.
 
-Physical BLE discovery, GATT, joystick, and both button levels were observed on Windows 11 on 2026-10-17. **The Phase 2 native mouse output has not yet been compiled or tested on Windows hardware.** Long idle stability, automatic reconnection, and behavior in elevated applications still require validation. No proprietary keep-alive has been established. See [protocol evidence](docs/protocol.md) and [mouse validation](docs/mouse.md).
+Physical BLE discovery, GATT, joystick, and both button levels were observed on Windows 11 on 2026-10-17. **The PokePointer 0.2 Windows cursor and button output was physically tested successfully on 2026-10-17. The new PokePointer 0.3 scroll gesture has not yet been validated on Windows hardware.** Long idle stability, automatic reconnection, and behavior in elevated applications still require validation. No proprietary keep-alive has been established. See [protocol evidence](docs/protocol.md) and [mouse validation](docs/mouse.md).
 
 ## Build on Windows
 
@@ -75,9 +75,9 @@ To explicitly select the controller:
 
 `--mouse` cannot be combined with `--scan` or `--inspect-gatt`. It can be combined with `--debug-raw` for investigation. Press `Ctrl+C` to stop. Mouse mode is not installed as a driver, a background service, or a startup entry.
 
-The first twelve stable button-free input reports calibrate the center. Keep the joystick untouched until `Mouse calibrated` appears. A radial deadzone suppresses small axis fluctuations. The joystick moves the cursor continuously with a nonlinear speed curve, up to approximately 900 pixels/second before Windows pointer processing. **Top button = left click; joystick press = right click.** Holding either button preserves its down state, enabling dragging. Mouse events are generated with the native Windows `SendInput` API.
+The first twelve stable button-free input reports calibrate the center. Keep the joystick untouched until `Mouse calibrated` appears. A radial deadzone suppresses small axis fluctuations. The joystick moves the cursor continuously with a nonlinear speed curve, up to approximately 900 pixels/second before Windows pointer processing. **Top button:** a short press is a left click (delayed by up to about 320 ms to recognize a second tap); holding the first press for 170 ms starts left-button dragging. Two short top presses generate a normal double click. To scroll, tap top once, then press and hold it again within 320 ms; after holding the second press for 300 ms, tilt the joystick vertically. Release top to return to normal cursor movement. This scroll gesture generates no clicks or dragging. **Joystick press = right click.** Mouse events are generated with the native Windows `SendInput` API.
 
-If a decoded input report is missing for 500 ms, the mouse motion timer stops and mouse buttons are released. BLE input invalidation and application shutdown also request button release. The normal Windows elevation/UIPI restrictions on injected input still apply. See [mouse validation](docs/mouse.md).
+If a decoded input report is missing for 500 ms, the mouse motion timer stops, any pending click is discarded, pressed buttons are released, and the pointer recalibrates on renewed input. BLE input invalidation and application shutdown also request button release. The normal Windows elevation/UIPI restrictions on injected input still apply. See [mouse validation](docs/mouse.md).
 
 Selection is saved under Qt's `AppConfigLocation` (normally `%LOCALAPPDATA%\PokePointer\PokePointer\device.ini`). `--forget-device` clears the selection but does not remove Windows pairings. The app rescans and resubscribes after recoverable BLE failures. For details, see [development instructions](docs/development.md).
 
@@ -98,6 +98,6 @@ Selection is saved under Qt's `AppConfigLocation` (normally `%LOCALAPPDATA%\Poke
 
 ## Next milestone
 
-Compile and validate Phase 2 on Windows hardware, especially button press/release/drag, stale-input release, shutdown, reconnection and idle stability. Then consider configurable sensitivity, deadzone and button mappings, a quieter user-facing UI, and eventual Linux/Android backends. Gyroscope control is deferred.
+Compile and validate the new scroll gesture on Windows hardware, particularly short clicks, double clicks, drag, scroll direction/speed, and release without stray clicks. Then verify reconnection and long-term stability, consider configurable sensitivity and button mappings, and eventually Linux/Android backends. Gyroscope control is deferred.
 
 No project license has been selected. Dependency licenses remain their owners' terms.

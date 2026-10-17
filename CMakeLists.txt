@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(PokePointer VERSION 0.2.0 LANGUAGES CXX)
+project(PokePointer VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -70,4 +70,9 @@ if(BUILD_TESTING)
     target_link_libraries(pokepointer_pointer_tests PRIVATE pokepointer_core)
     pokepointer_warnings(pokepointer_pointer_tests)
     add_test(NAME pointer COMMAND pokepointer_pointer_tests)
+
+    add_executable(pokepointer_gesture_tests tests/gesture_tests.cpp)
+    target_link_libraries(pokepointer_gesture_tests PRIVATE pokepointer_core)
+    pokepointer_warnings(pokepointer_gesture_tests)
+    add_test(NAME gestures COMMAND pokepointer_gesture_tests)
 endif()

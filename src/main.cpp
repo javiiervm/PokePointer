@@ -8,7 +8,7 @@ int main(int argc, char* argv[])
 {
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("PokePointer");
-    QCoreApplication::setApplicationVersion("0.2.0");
+    QCoreApplication::setApplicationVersion("0.3.0");
     QCoreApplication::setOrganizationName("PokePointer");
     QCommandLineParser parser;
     parser.setApplicationDescription("Pokeball Plus BLE diagnostics and opt-in Windows mouse control.");
@@ -17,7 +17,7 @@ int main(int argc, char* argv[])
     parser.addOption({"scan", "List BLE advertisements for 8 seconds, then exit without connecting."});
     parser.addOption({"inspect-gatt", "Connect, list GATT services/characteristics/descriptors, then exit."});
     parser.addOption({"debug-raw", "Show input notification hex previews (at most 10 per second)."});
-    parser.addOption({"mouse", "Enable native Windows mouse control (top=left, stick=right)."});
+    parser.addOption({"mouse", "Enable Windows mouse control (top=left/drag, double-tap-hold top=scroll, stick=right)."});
     parser.addOption({"device", "Select an address or device UUID printed by --scan.", "identifier"});
     parser.addOption({"forget-device", "Clear the saved selection; when used alone, exit."});
     parser.process(app);

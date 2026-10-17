@@ -61,6 +61,17 @@ void WindowsMouseOutput::setButtons(bool leftHeld, bool rightHeld)
     }
 }
 
+void WindowsMouseOutput::scrollVertical(int wheelDelta)
+{
+    if (wheelDelta == 0) return;
+    auto event = mouseEvent(MOUSEEVENTF_WHEEL);
+    event.mi.mouseData = static_cast<DWORD>(wheelDelta);
+    if (SendInput(1, &event, static_cast<int>(sizeof(INPUT))) != 1)
+        reportFailure();
+    else
+        warned_ = false;
+}
+
 void WindowsMouseOutput::releaseAll() noexcept
 {
     setButtons(false, false);

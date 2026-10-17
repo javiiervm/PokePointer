@@ -3,6 +3,8 @@
 #include "app/DeviceStore.h"
 #include "ble/BleSession.h"
 #include "core/PointerMotion.h"
+#include "core/ScrollMotion.h"
+#include "core/TopButtonGesture.h"
 #include "platform/ConsoleStop.h"
 #include "platform/MouseOutput.h"
 #include "protocol/InputDecoder.h"
@@ -22,6 +24,8 @@ public:
 private:
     void onInput(const QByteArray& packet);
     void resetMouse();
+    void applyTopGesture(const TopGestureEffect& effect);
+    void refreshMotionTimer();
     void print(const QString& text) const;
     DeviceStore& store_;
     BleSession session_;
@@ -30,6 +34,10 @@ private:
     bool mouseEnabled_{};
     std::unique_ptr<MouseOutput> mouseOutput_;
     PointerMotion pointer_;
+    ScrollMotion scroll_;
+    TopButtonGesture topGesture_;
+    std::optional<InputState> currentMouseInput_;
+    QElapsedTimer gestureClock_;
     QTimer motionTimer_;
     QTimer mouseSafetyTimer_;
     QElapsedTimer motionClock_;

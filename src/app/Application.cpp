@@ -17,22 +17,35 @@ Application::Application(BleOptions options, bool debugRaw, bool mouseEnabled,
 #ifdef Q_OS_WIN
     if (mouseEnabled_) mouseOutput_ = std::make_unique<WindowsMouseOutput>();
 #endif
+    gestureClock_.start();
     motionTimer_.setInterval(16);
     motionTimer_.setTimerType(Qt::PreciseTimer);
     connect(&motionTimer_, &QTimer::timeout, this, [this] {
-        if (!mouseOutput_) return;
+        if (!mouseOutput_ || !currentMouseInput_) return;
         const double elapsedSeconds = double(motionClock_.restart()) / 1000.0;
-        const auto [dx, dy] = pointer_.step(elapsedSeconds);
-        mouseOutput_->moveRelative(dx, dy);
-        if (!pointer_.moving()) motionTimer_.stop();
+        const auto effect = topGesture_.advance(gestureClock_.elapsed());
+        applyTopGesture(effect);
+        if (effect.scrollActive) {
+            pointer_.stopMotion();
+            scroll_.setInput(*currentMouseInput_, pointer_.centerY());
+            mouseOutput_->scrollVertical(scroll_.step(elapsedSeconds));
+        } else {
+            scroll_.reset();
+            if (effect.suppressPointer) {
+                pointer_.stopMotion();
+            } else {
+                pointer_.setInput(*currentMouseInput_);
+                const auto [dx, dy] = pointer_.step(elapsedSeconds);
+                mouseOutput_->moveRelative(dx, dy);
+            }
+        }
+        refreshMotionTimer();
     });
     mouseSafetyTimer_.setSingleShot(true);
     connect(&mouseSafetyTimer_, &QTimer::timeout, this, [this] {
         if (!mouseOutput_ || !pointer_.calibrated()) return;
-        motionTimer_.stop();
-        pointer_.stopMotion();
-        mouseOutput_->releaseAll();
-        print("Mouse input timeout (500 ms): movement stopped and buttons released.");
+        resetMouse();
+        print("Mouse input timeout (500 ms): movement stopped, buttons released, and calibration reset.");
     });
     connect(&session_, &BleSession::message, this, &Application::print);
     connect(&session_, &BleSession::stateChanged, this, [this](ConnectionState state) {
@@ -71,9 +84,10 @@ Application::Application(BleOptions options, bool debugRaw, bool mouseEnabled,
 
 void Application::start()
 {
-    print(mouseEnabled_ ? "PokePointer 0.2: Windows mouse mode enabled. Top=left, stick=right."
-                        : "PokePointer 0.2: BLE input diagnostics; native mouse output disabled.");
-    if (mouseEnabled_) print("Keep the joystick untouched during initial calibration. Ctrl+C to stop.");
+    print(mouseEnabled_ ? "PokePointer 0.3: Windows mouse mode. Top=left/drag; double-tap-hold top=scroll; stick=right."
+                        : "PokePointer 0.3: BLE input diagnostics; native mouse output disabled.");
+    if (mouseEnabled_)
+        print("Keep the joystick untouched during calibration. Double-tap top and hold the second press 300 ms to scroll. Ctrl+C to stop.");
     print("Device settings: " + store_.fileName());
     session_.start();
 }
@@ -88,8 +102,38 @@ void Application::resetMouse()
 {
     motionTimer_.stop();
     mouseSafetyTimer_.stop();
+    topGesture_.reset();
+    scroll_.reset();
+    currentMouseInput_.reset();
     pointer_.reset();
     if (mouseOutput_) mouseOutput_->releaseAll();
+}
+
+void Application::applyTopGesture(const TopGestureEffect& effect)
+{
+    if (!mouseOutput_) return;
+    const bool rightHeld = currentMouseInput_.has_value() && currentMouseInput_->stickPressed;
+    mouseOutput_->setButtons(effect.leftHeld, rightHeld);
+    // Deferred taps are emitted only once the controller rules out a scroll gesture.
+    // Consecutive complete click pulses preserve ordinary Windows double-click behavior.
+    for (unsigned i = 0; i < effect.clicks; ++i) {
+        mouseOutput_->setButtons(true, rightHeld);
+        mouseOutput_->setButtons(false, rightHeld);
+    }
+}
+
+void Application::refreshMotionTimer()
+{
+    if (!mouseOutput_ || !pointer_.calibrated()) return;
+    const bool needsTicks = topGesture_.timerNeeded()
+        || (!topGesture_.suppressPointer() && pointer_.moving());
+    if (needsTicks && !motionTimer_.isActive()) {
+        motionClock_.start();
+        motionTimer_.start();
+    } else if (!needsTicks) {
+        motionTimer_.stop();
+        pointer_.stopMotion();
+    }
 }
 
 void Application::onInput(const QByteArray& packet)
@@ -116,35 +160,33 @@ void Application::onInput(const QByteArray& packet)
                   + ". Use --debug-raw for packet diagnostics.");
         previousError_ = decoded.error;
         previousInput_.reset();
-        resetMouse(); // Unrecognized input must not leave buttons held.
+        resetMouse();
         return;
     }
     previousError_.reset();
     const auto& input = *decoded.state;
     if (mouseOutput_) {
         mouseSafetyTimer_.start(500);
-        if (!pointer_.calibrated()) {
-            if (pointer_.calibrate(input)) {
-                print(QString("Mouse calibrated: center-x=%1 center-y=%2; pointer enabled.")
-                          .arg(pointer_.centerX(), 0, 'f', 1)
-                          .arg(pointer_.centerY(), 0, 'f', 1));
-            }
+        if (!pointer_.calibrated() && pointer_.calibrate(input)) {
+            print(QString("Mouse calibrated: center-x=%1 center-y=%2; pointer enabled.")
+                      .arg(pointer_.centerX(), 0, 'f', 1)
+                      .arg(pointer_.centerY(), 0, 'f', 1));
         }
         if (pointer_.calibrated()) {
-            pointer_.setInput(input);
-            mouseOutput_->setButtons(input.topPressed, input.stickPressed);
-            if (pointer_.moving() && !motionTimer_.isActive()) {
-                motionClock_.start();
-                motionTimer_.start();
-            } else if (!pointer_.moving()) {
-                motionTimer_.stop();
+            currentMouseInput_ = input;
+            const auto effect = topGesture_.update(input.topPressed, gestureClock_.elapsed());
+            applyTopGesture(effect);
+            if (effect.suppressPointer) {
                 pointer_.stopMotion();
+            } else {
+                pointer_.setInput(input);
             }
+            if (!effect.scrollActive) scroll_.reset();
+            refreshMotionTimer();
         }
     }
     if (previousInput_ == decoded.state) return;
     previousInput_ = decoded.state;
-    // Keep mouse mode quiet; --debug-raw remains available when packet diagnostics are needed.
     if (!mouseEnabled_ || debugRaw_) {
         print(QString("Input raw-x=%1 raw-y=%2 top=%3 stick=%4")
                   .arg(input.joystickX).arg(input.joystickY)
