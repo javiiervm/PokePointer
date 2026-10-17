@@ -8,7 +8,7 @@ int main(int argc, char* argv[])
 {
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("PokePointer");
-    QCoreApplication::setApplicationVersion("0.3.0");
+    QCoreApplication::setApplicationVersion("1.0.0");
     QCoreApplication::setOrganizationName("PokePointer");
     QCommandLineParser parser;
     parser.setApplicationDescription("Pokeball Plus BLE diagnostics and opt-in Windows mouse control.");

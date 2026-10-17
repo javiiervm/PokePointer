@@ -84,8 +84,8 @@ Application::Application(BleOptions options, bool debugRaw, bool mouseEnabled,
 
 void Application::start()
 {
-    print(mouseEnabled_ ? "PokePointer 0.3: Windows mouse mode. Top=left/drag; double-tap-hold top=scroll; stick=right."
-                        : "PokePointer 0.3: BLE input diagnostics; native mouse output disabled.");
+    print(mouseEnabled_ ? "PokePointer 1.0.0: Windows mouse mode. Top=left/drag; double-tap-hold top=scroll; stick=right."
+                        : "PokePointer 1.0.0: BLE input diagnostics; native mouse output disabled.");
     if (mouseEnabled_)
         print("Keep the joystick untouched during calibration. Double-tap top and hold the second press 300 ms to scroll. Ctrl+C to stop.");
     print("Device settings: " + store_.fileName());

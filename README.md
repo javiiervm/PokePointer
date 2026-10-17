@@ -10,7 +10,7 @@
   </p>
 </div>
 
-PokePointer is a C++20 / Qt 6 CLI application for using a Nintendo Poke Ball Plus as a wireless mouse. **PokePointer 0.3 adds vertical wheel scrolling to the opt-in Windows mouse prototype via `--mouse`.** BLE diagnostics remain the default behavior. Windows 11 x64 is the first target; Linux and Android remain future validation targets.
+PokePointer is a C++20 / Qt 6 application that uses a Nintendo Poké Ball Plus as a wireless mouse. **Version 1.0.0 is the first stable Windows 11 x64 release**, providing cursor control, left/right clicks, double clicks, dragging, and vertical scrolling through `--mouse`. The default CLI mode remains BLE diagnostics. Linux and Android are not supported yet.
 
 ## Implemented
 
@@ -26,7 +26,7 @@ PokePointer is a C++20 / Qt 6 CLI application for using a Nintendo Poke Ball Plu
 - **Mouse safety:** initial center calibration, radial deadzone, speed curve, 500 ms input watchdog, button release on input invalidation and shutdown, and movement timer stopped at rest.
 - Qt-free tests for protocol/lifecycle/pointer mapping plus Qt offline and CLI tests.
 
-Physical BLE discovery, GATT, joystick, and both button levels were observed on Windows 11 on 2026-10-17. **The PokePointer 0.2 Windows cursor and button output was physically tested successfully on 2026-10-17. The new PokePointer 0.3 scroll gesture has not yet been validated on Windows hardware.** Long idle stability, automatic reconnection, and behavior in elevated applications still require validation. No proprietary keep-alive has been established. See [protocol evidence](docs/protocol.md) and [mouse validation](docs/mouse.md).
+BLE discovery, GATT inspection, joystick decoding, mouse movement, left/right clicks, dragging, and the scrolling gesture were successfully tried with a physical Poké Ball Plus on Windows 11 on 2026-10-17. The seven tests also passed in the MSVC Release build before this version bump. **The standalone distribution, recovery from unexpected Bluetooth loss, 15+ minute idle operation, and elevated-app behavior have not yet been verified.** No proprietary keep-alive has been established. See [protocol evidence](docs/protocol.md) and [mouse validation](docs/mouse.md).
 
 ## Build on Windows
 
@@ -47,7 +47,15 @@ cmake --build build-msvc --config Debug --parallel
 ctest --test-dir build-msvc -C Debug --output-on-failure
 ```
 
-The Visual Studio generator finds MSVC automatically; `cl.exe` does not need to be on Git Bash's PATH. Keep Qt's `bin` directory on PATH when launching the application. See [development instructions](docs/development.md) for additional build details.
+For a release build in the same configured build tree, use:
+
+```bash
+cmake --build build-msvc --config Release --parallel
+ctest --test-dir build-msvc -C Release --output-on-failure
+./build-msvc/Release/pokepointer.exe --version
+```
+
+The Visual Studio generator finds MSVC automatically; `cl.exe` does not need to be on Git Bash's PATH. Keep Qt's `bin` directory on PATH when running a build directly. See [development instructions](docs/development.md) for additional build details.
 
 ## Run
 
@@ -70,7 +78,7 @@ To enable native mouse output on Windows, **release the joystick while connectin
 To explicitly select the controller:
 
 ```bash
-./build-msvc/Debug/pokepointer.exe --device b8:8a:ec:e6:a6:4a --mouse
+./build-msvc/Debug/pokepointer.exe --device "AA:BB:CC:DD:EE:FF" --mouse
 ```
 
 `--mouse` cannot be combined with `--scan` or `--inspect-gatt`. It can be combined with `--debug-raw` for investigation. Press `Ctrl+C` to stop. Mouse mode is not installed as a driver, a background service, or a startup entry.
@@ -80,6 +88,46 @@ The first twelve stable button-free input reports calibrate the center. Keep the
 If a decoded input report is missing for 500 ms, the mouse motion timer stops, any pending click is discarded, pressed buttons are released, and the pointer recalibrates on renewed input. BLE input invalidation and application shutdown also request button release. The normal Windows elevation/UIPI restrictions on injected input still apply. See [mouse validation](docs/mouse.md).
 
 Selection is saved under Qt's `AppConfigLocation` (normally `%LOCALAPPDATA%\PokePointer\PokePointer\device.ini`). `--forget-device` clears the selection but does not remove Windows pairings. The app rescans and resubscribes after recoverable BLE failures. For details, see [development instructions](docs/development.md).
+
+## Windows portable distribution
+
+Run CMake's standard install/deploy step **after building and testing Release**. This automatically generates a versioned `Start-PokePointer.bat` and collects the necessary Qt libraries and plugins using Qt's deployment support (`qt_generate_deploy_app_script` / `windeployqt`). Do not copy only the executable from `build-msvc/Release`; it requires Qt DLLs.
+
+From Warp / Git Bash on the developer machine:
+
+```bash
+QT_ROOT="/c/Qt/6.12.0/msvc2022_64"
+export PATH="$QT_ROOT/bin:$PATH"
+cmake -S . -B build-msvc -G "Visual Studio 17 2022" -A x64 "-DCMAKE_PREFIX_PATH=$(cygpath -m "$QT_ROOT")"
+cmake --build build-msvc --config Release --parallel
+ctest --test-dir build-msvc -C Release --output-on-failure
+cmake --install build-msvc --config Release --prefix "$(cygpath -m "$PWD/dist/PokePointer-v1.0.0-windows-x64")"
+```
+
+The installed directory has the following structure:
+
+```text
+PokePointer-v1.0.0-windows-x64/
+  Start-PokePointer.bat
+  README.md
+  docs/mouse.md
+  bin/
+    pokepointer.exe
+    Qt6Core.dll
+    Qt6Bluetooth.dll
+    ... (other Qt DLLs and plugins copied by deployment)
+```
+
+Double-click `Start-PokePointer.bat` to run `bin/pokepointer.exe --mouse`. The batch launcher works regardless of the installation directory and shows the exit code if the program fails. `Ctrl+C` in the console requests an orderly shutdown. **Closing the window with X is not currently guaranteed to be orderly**: the Windows console handler only handles Ctrl+C/Ctrl+Break. Avoid closing it with X while dragging until close-event handling is implemented and tested.
+
+Once the staged folder works, create the archive from inside `dist`:
+
+```bash
+cd dist
+cmake -E tar cf PokePointer-v1.0.0-windows-x64.zip --format=zip PokePointer-v1.0.0-windows-x64
+```
+
+`NO_COMPILER_RUNTIME` intentionally omits compiler runtime copies; a user may need to install the **official Microsoft Visual C++ Redistributable x64**. Test on Windows with no Qt kit and with the Qt development `bin` directory absent from `PATH`; verify the batch file and all gestures. Review Qt license notice and redistribution obligations before publishing. The repo has not yet selected an application license.
 
 ## Project map
 
@@ -94,10 +142,10 @@ Selection is saved under Qt's `AppConfigLocation` (normally `%LOCALAPPDATA%\Poke
 | `docs/architecture.md` | Ownership, data flow, lifecycle and platform boundaries |
 | `docs/protocol.md` | Evidence, limitations, hypotheses and unknowns |
 | `docs/development.md` | Toolchain, tests and manual hardware checklist |
-| `docs/mouse.md` | Phase 2 behavior and manual Windows mouse validation |
+| `docs/mouse.md` | Windows mouse behavior and manual validation |
 
 ## Next milestone
 
-Compile and validate the new scroll gesture on Windows hardware, particularly short clicks, double clicks, drag, scroll direction/speed, and release without stray clicks. Then verify reconnection and long-term stability, consider configurable sensitivity and button mappings, and eventually Linux/Android backends. Gyroscope control is deferred.
+Validate the portable Windows distribution on a machine without Qt installed, including all input gestures. Follow up with deliberate Bluetooth disconnection/reconnection, 15+ minute idle testing, and checks in elevated applications. Possible later improvements include configurable sensitivity and button mappings and Linux/Android backends. Gyroscope control is deferred.
 
 No project license has been selected. Dependency licenses remain their owners' terms.

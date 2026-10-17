@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(PokePointer VERSION 0.3.0 LANGUAGES CXX)
+project(PokePointer VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -48,6 +48,28 @@ if(POKEPOINTER_BUILD_APP)
     add_executable(pokepointer src/main.cpp)
     target_link_libraries(pokepointer PRIVATE pokepointer_runtime)
     pokepointer_warnings(pokepointer)
+    # Stage a portable Windows distribution using Qt's own deployment support.
+    # This is a separate install step; regular builds remain free of copied DLLs.
+    if(WIN32)
+        include(GNUInstallDirs)
+        configure_file(
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/Start-PokePointer.bat.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/Start-PokePointer.bat"
+            @ONLY NEWLINE_STYLE CRLF)
+        install(TARGETS pokepointer RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+        install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Start-PokePointer.bat"
+                      "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
+                DESTINATION ".")
+        install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/mouse.md"
+                DESTINATION "docs")
+        qt_generate_deploy_app_script(
+            TARGET pokepointer
+            OUTPUT_SCRIPT pokepointer_deploy_script
+            NO_TRANSLATIONS
+            NO_COMPILER_RUNTIME)
+        install(SCRIPT "${pokepointer_deploy_script}")
+    endif()
+
     if(BUILD_TESTING)
         add_executable(pokepointer_qt_tests tests/qt_tests.cpp)
         target_link_libraries(pokepointer_qt_tests PRIVATE pokepointer_runtime)

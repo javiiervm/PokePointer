@@ -1,0 +1,23 @@
+@echo off
+setlocal
+
+title PokePointer v@PROJECT_VERSION@ - Mouse Mode
+set "POKEPOINTER_EXE=%~dp0bin\pokepointer.exe"
+
+if not exist "%POKEPOINTER_EXE%" (
+    echo ERROR: PokePointer executable not found: "%POKEPOINTER_EXE%"
+    echo Please extract the complete release archive before launching.
+    pause
+    exit /b 1
+)
+
+"%POKEPOINTER_EXE%" --mouse
+set "result=%errorlevel%"
+
+if not "%result%"=="0" (
+    echo.
+    echo PokePointer exited with error code %result%.
+    pause
+)
+
+endlocal & exit /b %result%
