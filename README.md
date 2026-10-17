@@ -1,4 +1,18 @@
-# PokePointer
+<div align="center">
+  <img width="900" height="300" alt="PokePointer Logo with Cursor" src="https://github.com/user-attachments/assets/74a23716-7ebf-4f50-838d-62b1030fb7f8" />
+  <br />
+  <p>
+    <img src="https://img.shields.io/github/last-commit/javiiervm/PokePointer" alt="Last Commit" />
+    <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform" />
+    <img src="https://img.shields.io/badge/C%2B%2B-20-blue" alt="C++ Version" />
+    <img src="https://img.shields.io/badge/Qt-6-41CD52" alt="Qt Version" />
+    <img src="https://img.shields.io/badge/build-CMake-064F8C" alt="Build System" />
+    <img src="https://img.shields.io/badge/connectivity-Bluetooth%20LE-purple" alt="Connectivity" />
+    <img src="https://img.shields.io/github/issues/javiiervm/PokePointer" alt="Issues" />
+    <img src="https://img.shields.io/github/stars/javiiervm/PokePointer" alt="Stars" />
+  </p>
+</div>
+
 
 PokePointer is a C++20 / Qt 6 CLI foundation for using a Nintendo Poke Ball Plus as a wireless mouse. **This version implements Phases 0 and 1 only: BLE communication and input diagnostics. It does not move or click the mouse.** Windows 11 x64 is the first target; Linux and Android remain future validation targets.
 
