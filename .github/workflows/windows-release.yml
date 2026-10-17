@@ -28,6 +28,9 @@ jobs:
           arch: win64_msvc2022_64
           modules: qtconnectivity
           cache: true
+          # Qt 6.11+ uses a new download repository layout, fixed by aqtinstall PR #1000.
+          # Pin the upstream merge commit until that fix is included in a tagged release.
+          aqtsource: git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b
 
       - name: Determine package version
         id: package-version
