@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(PokePointer VERSION 0.1.0 LANGUAGES CXX)
+project(PokePointer VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,6 +37,11 @@ if(POKEPOINTER_BUILD_APP)
         src/app/DeviceStore.cpp src/app/DeviceStore.h
         src/platform/ConsoleStop.cpp src/platform/ConsoleStop.h
     )
+    if(WIN32)
+        target_sources(pokepointer_runtime PRIVATE
+            src/platform/WindowsMouseOutput.cpp src/platform/WindowsMouseOutput.h)
+        target_link_libraries(pokepointer_runtime PRIVATE user32)
+    endif()
     set_target_properties(pokepointer_runtime PROPERTIES AUTOMOC ON)
     target_link_libraries(pokepointer_runtime PUBLIC pokepointer_core Qt6::Core Qt6::Bluetooth)
     pokepointer_warnings(pokepointer_runtime)
@@ -50,7 +55,8 @@ if(POKEPOINTER_BUILD_APP)
         add_test(NAME qt_offline COMMAND pokepointer_qt_tests)
         add_test(NAME cli_help COMMAND pokepointer --help)
         add_test(NAME cli_invalid_combination COMMAND pokepointer --scan --inspect-gatt)
-        set_tests_properties(cli_invalid_combination PROPERTIES WILL_FAIL TRUE)
+        add_test(NAME cli_invalid_mouse_combination COMMAND pokepointer --scan --mouse)
+        set_tests_properties(cli_invalid_combination cli_invalid_mouse_combination PROPERTIES WILL_FAIL TRUE)
     endif()
 endif()
 
@@ -59,4 +65,9 @@ if(BUILD_TESTING)
     target_link_libraries(pokepointer_core_tests PRIVATE pokepointer_core)
     pokepointer_warnings(pokepointer_core_tests)
     add_test(NAME core COMMAND pokepointer_core_tests)
+
+    add_executable(pokepointer_pointer_tests tests/pointer_tests.cpp)
+    target_link_libraries(pokepointer_pointer_tests PRIVATE pokepointer_core)
+    pokepointer_warnings(pokepointer_pointer_tests)
+    add_test(NAME pointer COMMAND pokepointer_pointer_tests)
 endif()

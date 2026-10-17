@@ -1,4 +1,7 @@
 #include "app/Application.h"
+#ifdef Q_OS_WIN
+#include "platform/WindowsMouseOutput.h"
+#endif
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QTextStream>
@@ -6,15 +9,38 @@
 #include <utility>
 
 namespace pokepointer {
-Application::Application(BleOptions options, bool debugRaw, DeviceStore& store, QObject* parent)
-    : QObject(parent), store_(store), session_(std::move(options)), debugRaw_(debugRaw)
+Application::Application(BleOptions options, bool debugRaw, bool mouseEnabled,
+                         DeviceStore& store, QObject* parent)
+    : QObject(parent), store_(store), session_(std::move(options)),
+      debugRaw_(debugRaw), mouseEnabled_(mouseEnabled)
 {
+#ifdef Q_OS_WIN
+    if (mouseEnabled_) mouseOutput_ = std::make_unique<WindowsMouseOutput>();
+#endif
+    motionTimer_.setInterval(16);
+    motionTimer_.setTimerType(Qt::PreciseTimer);
+    connect(&motionTimer_, &QTimer::timeout, this, [this] {
+        if (!mouseOutput_) return;
+        const double elapsedSeconds = double(motionClock_.restart()) / 1000.0;
+        const auto [dx, dy] = pointer_.step(elapsedSeconds);
+        mouseOutput_->moveRelative(dx, dy);
+        if (!pointer_.moving()) motionTimer_.stop();
+    });
+    mouseSafetyTimer_.setSingleShot(true);
+    connect(&mouseSafetyTimer_, &QTimer::timeout, this, [this] {
+        if (!mouseOutput_ || !pointer_.calibrated()) return;
+        motionTimer_.stop();
+        pointer_.stopMotion();
+        mouseOutput_->releaseAll();
+        print("Mouse input timeout (500 ms): movement stopped and buttons released.");
+    });
     connect(&session_, &BleSession::message, this, &Application::print);
     connect(&session_, &BleSession::stateChanged, this, [this](ConnectionState state) {
         print("State: " + QString::fromLatin1(stateName(state)));
     });
     connect(&session_, &BleSession::inputNotification, this, &Application::onInput);
     connect(&session_, &BleSession::inputInvalidated, this, [this] {
+        resetMouse();
         if (previousInput_) print("Input state unavailable; previous button levels are no longer valid.");
         previousInput_.reset();
         previousError_.reset();
@@ -25,8 +51,14 @@ Application::Application(BleOptions options, bool debugRaw, DeviceStore& store, 
             print("Could not persist device selection at " + store_.fileName());
     });
     connect(&session_, &BleSession::finished, this, [](int code) { QCoreApplication::exit(code); });
-    connect(&consoleStop_, &ConsoleStop::requested, this, [this] { session_.stop(); });
-    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, [this] { session_.stop(); });
+    connect(&consoleStop_, &ConsoleStop::requested, this, [this] {
+        resetMouse();
+        session_.stop();
+    });
+    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, [this] {
+        resetMouse();
+        session_.stop();
+    });
     connect(&rawSummary_, &QTimer::timeout, this, [this] {
         if (rawSuppressed_ != 0)
             print(QString("Raw diagnostics: %1 duplicate/rate-limited packet(s) suppressed this second.")
@@ -39,7 +71,9 @@ Application::Application(BleOptions options, bool debugRaw, DeviceStore& store, 
 
 void Application::start()
 {
-    print("PokePointer 0.1: BLE input diagnostics. Native mouse output is not implemented.");
+    print(mouseEnabled_ ? "PokePointer 0.2: Windows mouse mode enabled. Top=left, stick=right."
+                        : "PokePointer 0.2: BLE input diagnostics; native mouse output disabled.");
+    if (mouseEnabled_) print("Keep the joystick untouched during initial calibration. Ctrl+C to stop.");
     print("Device settings: " + store_.fileName());
     session_.start();
 }
@@ -48,6 +82,14 @@ void Application::print(const QString& text) const
 {
     QTextStream output(stdout);
     output << QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs) << " " << text << Qt::endl;
+}
+
+void Application::resetMouse()
+{
+    motionTimer_.stop();
+    mouseSafetyTimer_.stop();
+    pointer_.reset();
+    if (mouseOutput_) mouseOutput_->releaseAll();
 }
 
 void Application::onInput(const QByteArray& packet)
@@ -73,16 +115,40 @@ void Application::onInput(const QByteArray& packet)
             print("Input not decoded: " + QString::fromLatin1(decodeErrorText(decoded.error))
                   + ". Use --debug-raw for packet diagnostics.");
         previousError_ = decoded.error;
-        // Do not retain a held-button interpretation across unknown input formats.
         previousInput_.reset();
+        resetMouse(); // Unrecognized input must not leave buttons held.
         return;
     }
     previousError_.reset();
+    const auto& input = *decoded.state;
+    if (mouseOutput_) {
+        mouseSafetyTimer_.start(500);
+        if (!pointer_.calibrated()) {
+            if (pointer_.calibrate(input)) {
+                print(QString("Mouse calibrated: center-x=%1 center-y=%2; pointer enabled.")
+                          .arg(pointer_.centerX(), 0, 'f', 1)
+                          .arg(pointer_.centerY(), 0, 'f', 1));
+            }
+        }
+        if (pointer_.calibrated()) {
+            pointer_.setInput(input);
+            mouseOutput_->setButtons(input.topPressed, input.stickPressed);
+            if (pointer_.moving() && !motionTimer_.isActive()) {
+                motionClock_.start();
+                motionTimer_.start();
+            } else if (!pointer_.moving()) {
+                motionTimer_.stop();
+                pointer_.stopMotion();
+            }
+        }
+    }
     if (previousInput_ == decoded.state) return;
     previousInput_ = decoded.state;
-    const auto& input = *decoded.state;
-    print(QString("Input raw-x=%1 raw-y=%2 top=%3 stick=%4")
-              .arg(input.joystickX).arg(input.joystickY)
-              .arg(input.topPressed ? "held" : "released", input.stickPressed ? "held" : "released"));
+    // Keep mouse mode quiet; --debug-raw remains available when packet diagnostics are needed.
+    if (!mouseEnabled_ || debugRaw_) {
+        print(QString("Input raw-x=%1 raw-y=%2 top=%3 stick=%4")
+                  .arg(input.joystickX).arg(input.joystickY)
+                  .arg(input.topPressed ? "held" : "released", input.stickPressed ? "held" : "released"));
+    }
 }
 } // namespace pokepointer

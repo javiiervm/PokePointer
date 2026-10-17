@@ -2,24 +2,37 @@
 
 #include "app/DeviceStore.h"
 #include "ble/BleSession.h"
+#include "core/PointerMotion.h"
 #include "platform/ConsoleStop.h"
+#include "platform/MouseOutput.h"
 #include "protocol/InputDecoder.h"
+#include <QElapsedTimer>
 #include <QObject>
+#include <QTimer>
+#include <memory>
 #include <optional>
 
 namespace pokepointer {
 class Application final : public QObject {
     Q_OBJECT
 public:
-    Application(BleOptions options, bool debugRaw, DeviceStore& store, QObject* parent = nullptr);
+    Application(BleOptions options, bool debugRaw, bool mouseEnabled, DeviceStore& store,
+                QObject* parent = nullptr);
     void start();
 private:
     void onInput(const QByteArray& packet);
+    void resetMouse();
     void print(const QString& text) const;
     DeviceStore& store_;
     BleSession session_;
     ConsoleStop consoleStop_;
     bool debugRaw_{};
+    bool mouseEnabled_{};
+    std::unique_ptr<MouseOutput> mouseOutput_;
+    PointerMotion pointer_;
+    QTimer motionTimer_;
+    QTimer mouseSafetyTimer_;
+    QElapsedTimer motionClock_;
     std::optional<InputState> previousInput_;
     std::optional<DecodeError> previousError_;
     QByteArray previousRaw_;
