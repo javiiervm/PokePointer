@@ -1,13 +1,18 @@
 <div align="center">
-  <img width="650" alt="PokePointer logo" src="https://github.com/user-attachments/assets/74a23716-7ebf-4f50-838d-62b1030fb7f8" />
+  <img width="650" alt="PokePointer Logo with Cursor" src="https://github.com/user-attachments/assets/74a23716-7ebf-4f50-838d-62b1030fb7f8" />
+  <br />
   <p>
+    <img src="https://img.shields.io/github/last-commit/javiiervm/PokePointer" alt="Last Commit" />
     <img src="https://img.shields.io/badge/platform-Windows%2011%20x64-lightgrey" alt="Windows 11 x64" />
-    <img src="https://img.shields.io/badge/C%2B%2B-20-blue" alt="C++20" />
-    <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License" />
+    <img src="https://img.shields.io/badge/C%2B%2B-20-blue" alt="C++ Version" />
+    <img src="https://img.shields.io/github/issues/javiiervm/PokePointer" alt="Issues" />
+    <img src="https://img.shields.io/github/stars/javiiervm/PokePointer" alt="Stars" />
   </p>
 </div>
 
-**PokePointer turns a Nintendo Poké Ball Plus into a wireless mouse for Windows 11.** Move the cursor, click, drag windows, and scroll using the controller's joystick and buttons over Bluetooth Low Energy (BLE).
+**PokePointer** is a C++20 / Qt 6 application that **turns a Nintendo Poké Ball Plus into a wireless mouse for Windows 11.** Move the cursor, click, drag windows, and scroll using the controller's joystick and buttons over Bluetooth Low Energy (BLE).
+
+> Linux and Android are not supported yet, but will be in future releases.
 
 **Version 1.0.0** is the first Windows release. No installer or Qt development tools are needed to run the portable download.
 
