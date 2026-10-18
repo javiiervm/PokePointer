@@ -21,7 +21,7 @@ PokePointer is a C++20 / Qt 6 application that uses a Nintendo Poké Ball Plus a
 - Optional timestamped raw hex previews, limited to ten lines per second with suppression counts.
 - Operation deadlines, reconnect backoff (1, 2, 4, 8, 16, then 30 seconds), and fresh discovery on retry.
 - Persistent selection in a local application settings file; `--forget-device` clears it.
-- Ctrl+C / Ctrl+Break shutdown on Windows; SIGINT / SIGTERM handling on Unix.
+- Ctrl+C / Ctrl+Break / console-window-close shutdown on Windows; SIGINT / SIGTERM handling on Unix.
 - **Opt-in Windows mouse output:** joystick moves the cursor, a short top press performs a left click, holding top performs left-button dragging, and pressing the joystick performs a right click. Double-tap-and-hold top activates vertical scroll with the joystick.
 - **Mouse safety:** initial center calibration, radial deadzone, speed curve, 500 ms input watchdog, button release on input invalidation and shutdown, and movement timer stopped at rest.
 - Qt-free tests for protocol/lifecycle/pointer mapping plus Qt offline and CLI tests.
@@ -117,7 +117,7 @@ PokePointer-v1.0.0-windows-x64/
     Qt6Bluetooth.dll
 ```
 
-Double-click `Start-PokePointer.bat` to run `bin/pokepointer.exe --mouse`. The batch launcher works regardless of the installation directory and shows the exit code if the program fails. `Ctrl+C` in the console requests an orderly shutdown. **Closing the window with X is not currently guaranteed to be orderly**: the Windows console handler only handles Ctrl+C/Ctrl+Break. Avoid closing it with X while dragging until close-event handling is implemented and tested.
+Double-click `Start-PokePointer.bat` to run `bin/pokepointer.exe --mouse`. The batch launcher works regardless of the installation directory and shows the exit code if the program fails. `Ctrl+C` in the console requests an orderly shutdown. **Closing the window with X requests orderly shutdown but remains subject to Windows console-close time limits**: the console handler waits up to four seconds for the Qt event loop to exit. Close-with-X behavior must be validated on real Windows; forced process termination cannot be handled.
 
 The `.github/workflows/windows-release.yml` workflow builds Release with MSVC, runs seven tests, stages the same distribution, checks for both Qt DLLs, and runs `pokepointer.exe --version` without the Qt development `bin` folder on `PATH`. A successful workflow run uploads a downloadable ZIP artifact. Tagged builds can publish the ZIP as a GitHub Release; do not tag until the package is verified.
 

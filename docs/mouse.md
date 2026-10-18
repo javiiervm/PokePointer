@@ -9,7 +9,7 @@ PokePointer v1.0.0 provides opt-in native Windows mouse input with cursor moveme
 3. For development, run `./build-msvc/Release/pokepointer.exe --mouse` with Qt on `PATH`; for the portable distribution, double-click `Start-PokePointer.bat` in the installed folder.
 4. Leave the joystick centered and both buttons released until `Mouse calibrated` appears; calibration uses twelve consecutive stable input reports.
 5. Test movement, short left click, short double click, long-press dragging, right click, and finally scrolling on a page.
-6. Press `Ctrl+C` in the console to stop cleanly; until console-close handling is updated and validated, closing with X is not equivalent to an orderly shutdown. Normal diagnostics remain the default without `--mouse`.
+6. Press `Ctrl+C` in the console to stop cleanly. Closing the console with X also requests a graceful shutdown; the console-close handler waits up to four seconds for Qt to exit. Validate this behavior in the target Windows terminal, since forced process termination cannot be handled. Normal diagnostics remain the default without `--mouse`.
 
 ## Mapping and gesture timing
 
@@ -51,7 +51,7 @@ Input injection can be blocked on elevated or secure desktops by Windows protect
 8. Test releasing the second press before 300 ms; it must act as a double click rather than entering scroll mode.
 9. Press the joystick for a right click and verify it still works independently.
 10. Disconnect the controller during a drag or scroll: events must stop within 500 ms, held buttons must release, and pending clicks must be discarded. Reconnect and verify recalibration.
-11. Stop with `Ctrl+C` while holding the button, then check that no click remains held.
+11. Stop with `Ctrl+C` while holding the button, then check that no click remains held. Repeat with the X button on the console, including during dragging; ensure no mouse button stays held.
 12. Later, check 15-minute idle stability and auto-reconnection.
 
 The core mouse controls, including the scroll gesture, were reported working on Windows 11. Keep the individual checks above for release-candidate validation; reconnection, long-idle behavior, cross-machine deployment, and elevated-app compatibility remain unverified. Scroll speed may need adjustments for some applications.
