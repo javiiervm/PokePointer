@@ -116,6 +116,10 @@ PokePointer-v1.0.0-windows-x64/
     LGPL-3.0.txt
     GPL-3.0.txt
     QT-NOTICE.md
+    QT-THIRD-PARTY-NOTICES.md
+    Apache-2.0.txt
+    CC0-1.0.txt
+    sbom/  (if provided by the installed Qt kit)
   bin/
     pokepointer.exe
     Qt6Core.dll
@@ -133,11 +137,11 @@ cd dist
 cmake -E tar cf PokePointer-v1.0.0-windows-x64.zip --format=zip PokePointer-v1.0.0-windows-x64
 ```
 
-Compiler runtime DLLs are deliberately not copied. End users might need the **official Microsoft Visual C++ Redistributable x64**. Test the package on Windows without Qt installed (and without its `bin` directory on `PATH`) and verify Bluetooth and all mouse gestures. PokePointer is MIT-licensed (`LICENSE`). The package includes the GNU LGPLv3 and GPLv3 texts and Qt notices under `licenses/`. Before public distribution, verify any additional notices required for third-party code inside the exact Qt DLL build; see `licenses/QT-NOTICE.md`.
+Compiler runtime DLLs are deliberately not copied. End users might need the **official Microsoft Visual C++ Redistributable x64**. Test the package on Windows without Qt installed (and without its `bin` directory on `PATH`) and verify Bluetooth and all mouse gestures. PokePointer is MIT-licensed (`LICENSE`). The package includes the GNU LGPLv3 and GPLv3 texts, Qt's third-party inventory and redistribution notices, and the Apache-2.0/CC0-1.0 license texts under `licenses/`. Where available, the official Qt SPDX SBOM documents for the installed build are also packaged. See `licenses/QT-NOTICE.md` and `licenses/QT-THIRD-PARTY-NOTICES.md`.
 
 ## Licensing
 
-PokePointer itself is distributed under the **MIT License**; see [`LICENSE`](LICENSE). The Windows binary dynamically links the **independently licensed Qt 6.12.0 Core and Bluetooth DLLs** under LGPLv3. The portable ZIP includes their LGPLv3/GPLv3 license texts, source-access information and additional attribution guidance in [`licenses/QT-NOTICE.md`](licenses/QT-NOTICE.md). The MIT license does not cover Qt or Qt third-party components.
+PokePointer itself is distributed under the **MIT License**; see [`LICENSE`](LICENSE). The Windows binary dynamically links the **independently licensed Qt 6.12.0 Core and Bluetooth DLLs** under LGPLv3. The portable ZIP includes their LGPLv3/GPLv3 license texts, source-access information and attribution statements in [`licenses/QT-NOTICE.md`](licenses/QT-NOTICE.md) and [`licenses/QT-THIRD-PARTY-NOTICES.md`](licenses/QT-THIRD-PARTY-NOTICES.md). The MIT license does not cover Qt or Qt third-party components.
 
 ## Project map
 
@@ -156,6 +160,6 @@ PokePointer itself is distributed under the **MIT License**; see [`LICENSE`](LIC
 
 ## Next milestone
 
-Complete the Qt third-party notice audit and publish v1.0.0 once the licensed release bundle is checked. Follow up with deliberate Bluetooth disconnection/reconnection, 15+ minute idle testing, and checks in elevated applications. Possible later improvements include configurable sensitivity and button mappings and Linux/Android backends. Gyroscope control is deferred.
+Publish v1.0.0 after the final CI-built ZIP is inspected for license files. Follow up with deliberate Bluetooth disconnection/reconnection, 15+ minute idle testing, and checks in elevated applications. Possible later improvements include configurable sensitivity and button mappings and Linux/Android backends. Gyroscope control is deferred.
 
 PokePointer is licensed under MIT. Qt and its included third-party components remain under their respective licenses.

@@ -83,8 +83,22 @@ if(POKEPOINTER_BUILD_APP)
             "${CMAKE_CURRENT_SOURCE_DIR}/licenses/LGPL-3.0.txt"
             "${CMAKE_CURRENT_SOURCE_DIR}/licenses/GPL-3.0.txt"
             "${CMAKE_CURRENT_SOURCE_DIR}/licenses/QT-NOTICE.md"
+            "${CMAKE_CURRENT_SOURCE_DIR}/licenses/QT-THIRD-PARTY-NOTICES.md"
+            "${CMAKE_CURRENT_SOURCE_DIR}/licenses/Apache-2.0.txt"
+            "${CMAKE_CURRENT_SOURCE_DIR}/licenses/CC0-1.0.txt"
             DESTINATION "licenses"
             CONFIGURATIONS Release)
+        # The official Qt installer may provide build-specific SPDX SBOM files.
+        # Include those only when installed; some aqtinstall layouts omit them.
+        get_filename_component(_qt_install_prefix "${Qt6Core_DIR}/../../.." ABSOLUTE)
+        if(EXISTS "${_qt_install_prefix}/sbom")
+            install(DIRECTORY "${_qt_install_prefix}/sbom/"
+                DESTINATION "licenses/sbom"
+                CONFIGURATIONS Release
+                FILES_MATCHING
+                PATTERN "qtbase-*.spdx*"
+                PATTERN "qtconnectivity-*.spdx*")
+        endif()
     endif()
 
     if(BUILD_TESTING)
