@@ -1,77 +1,101 @@
 # Architecture
 
-## Boundaries and ownership
+PokePointer v1.0.0 is a Qt 6 console application with a native Windows mouse backend. Bluetooth transport, input decoding, gesture recognition, pointer mapping, and OS mouse output are separate layers. The application uses one Qt event loop; it does not create a polling worker thread, driver, background service, or GUI.
 
-The application uses one Qt event loop and no application-created worker threads. Native Bluetooth activity is asynchronous through Qt; OS console callbacks only set a flag. A timer transfers the stop request to the Qt thread.
+## Data flow
 
 ```mermaid
 flowchart LR
-    CLI[main / QCommandLineParser] --> App[Application]
-    App --> Store[DeviceStore / INI settings]
+    CLI[CLI / main] --> App[Application]
+    App --> Store[DeviceStore]
     App --> BLE[BleSession / Qt Bluetooth]
-    BLE -->|characteristic bytes| Decoder[InputDecoder / standard C++]
-    Decoder --> State[InputState / raw axes and button levels]
-    State --> Log[Changed-state CLI output]
-    Future[Future Phase 2 coordinator] -.-> Mouse[MouseOutput interface]
+    BLE --> Decoder[InputDecoder]
+    Decoder --> State[InputState]
+    State --> Gesture[TopButtonGesture]
+    State --> Pointer[PointerMotion]
+    State --> Scroll[ScrollMotion]
+    Gesture --> App
+    Pointer --> App
+    Scroll --> App
+    App --> Output[MouseOutput interface]
+    Output --> Win[WindowsMouseOutput / SendInput]
 ```
 
-`main` owns `QCoreApplication`, `DeviceStore`, and `Application` on the stack. `Application` owns `BleSession`, console handling, and its diagnostic timer by value, without assigning those value members a QObject parent. `BleSession` owns dynamically created discovery agents and controllers as QObject children. Service objects belong to their controller. QPointer members observe those children, and retired objects use `deleteLater()` to avoid deleting a signal sender inside its callback. QObject parent destruction provides the final cleanup fallback.
+The default CLI runs **diagnostics only**. The `--mouse` option creates `WindowsMouseOutput` and enables mouse effects; there is no mouse output without this option. `--scan`, `--inspect-gatt`, and `--debug-raw` provide discovery and input diagnostics.
 
-`src/core` and `src/protocol` have no Qt or Windows dependencies. The decoder consumes a read-only `std::span` and returns either a value or a specific validation error. It cannot connect devices or synthesize mouse events. `InputState` stores two unsigned, coarse raw axis values and two button levels; it does not assume a calibrated center or orientation.
+## Components and ownership
 
-`MouseOutput` is an interface for relative movement, button levels, and release-all. There is no implementation or instance in this version. Phase 2 must preserve holds and release native buttons on disconnect, invalid state, shutdown, and backend destruction.
+| Component | Responsibility |
+| --- | --- |
+| `src/main.cpp` | Command-line options, Qt application lifetime, startup |
+| `src/app/Application.*` | Coordinates BLE events, calibration, gestures, timers, mouse safety, output |
+| `src/app/DeviceStore.*` | Remembers the selected device using a Qt settings file |
+| `src/ble/BleSession.*` | Asynchronous scan, BLE connection, GATT discovery, notification subscription, retries |
+| `src/protocol/InputDecoder.*` | Validates and decodes the known 17-byte input report |
+| `src/core/InputState.h` | Coarse joystick coordinates and two button levels |
+| `src/core/PointerMotion.h` | Calibrated relative motion and radial deadzone |
+| `src/core/TopButtonGesture.h` | Short click, double-click, drag, double-tap-and-hold scroll detection |
+| `src/core/ScrollMotion.h` | Joystick Y-axis to Windows wheel deltas |
+| `src/platform/MouseOutput.h` | Platform-independent mouse-output contract |
+| `src/platform/WindowsMouseOutput.*` | Native Win32 `SendInput` implementation |
+| `src/platform/ConsoleStop.*` | Ctrl+C, Ctrl+Break, and Windows console-close requests |
 
-## Lifecycle
+`main` constructs the store and application coordinator. `Application` owns its BLE session, gesture and motion state, console handler, and Qt timers. `BleSession` creates Qt Bluetooth objects with QObject ownership and retires them when a connection attempt ends. BLE callbacks are guarded by a generation counter so obsolete asynchronous results cannot change the current session.
+
+`src/core` and `src/protocol` do **not** depend on Qt or Windows APIs. Their mappings can be tested without a Bluetooth device. `InputDecoder` cannot generate mouse events; only `Application` passes validated effects to `MouseOutput`.
+
+## BLE connection lifecycle
 
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
     Idle --> Scanning
-    Scanning --> Connecting: selected advertisement
+    Scanning --> Connecting: candidate selected
     Connecting --> Discovering: connected
-    Discovering --> Subscribing: known input service ready
-    Subscribing --> Streaming: CCCD write acknowledged
-    Scanning --> Reconnecting: no device / recoverable error
-    Connecting --> Reconnecting: error / deadline
-    Discovering --> Reconnecting: error / deadline
-    Subscribing --> Reconnecting: error / deadline
-    Streaming --> Reconnecting: disconnection / error
+    Discovering --> Subscribing: input service found
+    Subscribing --> Streaming: CCCD confirmed
+    Scanning --> Reconnecting: recoverable failure
+    Connecting --> Reconnecting: error or deadline
+    Discovering --> Reconnecting: error or deadline
+    Subscribing --> Reconnecting: error or deadline
+    Streaming --> Reconnecting: disconnected or error
     Reconnecting --> Scanning: backoff expires
+    Idle --> ShuttingDown: stop
     Streaming --> ShuttingDown: stop
     Reconnecting --> ShuttingDown: stop
-    Scanning --> ShuttingDown: scan mode completed / stop
-    Discovering --> ShuttingDown: inspection completed / stop
+    Scanning --> ShuttingDown: stop
+    Connecting --> ShuttingDown: stop
+    Discovering --> ShuttingDown: stop
+    Subscribing --> ShuttingDown: stop
     ShuttingDown --> Stopped
 ```
 
-Shutdown is accepted from every nonterminal state, including Idle, Connecting and Subscribing. Fatal errors also enter shutdown. The pure `Lifecycle` policy rejects repeated and invalid transitions; tests exercise normal, failure, and stop paths. One-shot scan/inspection failures exit with code 1 instead of retrying forever.
+Each attempt performs a fresh advertisement scan and obtains new GATT objects. The input characteristic is subscribed to using the standard CCCD write (`01 00`); no proprietary initialization or keep-alive commands are used. Device selection prefers an explicitly provided identifier or a remembered identity. If a remembered identity is missing, only an unambiguous candidate can replace it. Multiple eligible candidates are not selected arbitrarily.
 
-| Operation | Deadline/policy |
+Important timing policies:
+
+| Operation | Limit / behavior |
 | --- | --- |
-| Advertisement scan | 8-second scan, 12-second outer watchdog |
-| Connect | 20 seconds |
-| Service enumeration | 20 seconds |
-| Each service's details | 15 seconds, sequential |
-| CCCD subscription | 10 seconds; success requires matching descriptor and value |
-| Retry | 1, 2, 4, 8, 16, 30 seconds, then capped at 30 |
-| Retry reset | After 30 seconds streaming, provided at least one notification arrived |
-| Input silence | Warn once after 15 seconds without a notification; rearm on new input |
-| Shutdown disconnect | 2 seconds, then dispose local resources |
+| Scan | 8-second BLE scan; 12-second watchdog |
+| Connection | 20-second deadline |
+| Service discovery | 20-second deadline; 15 seconds per service-details request |
+| CCCD subscription | 10-second deadline |
+| Retry | Backoff 1, 2, 4, 8, 16, then capped at 30 seconds |
+| No input notifications | Warn after 15 seconds, without assuming the link disconnected |
+| BLE shutdown | Up to 2 seconds before releasing local resources |
 
-Silence is not proof of a failed link. There is no confirmed notification cadence or keep-alive, so silence alone does not force a disconnect. If the first input arrives after the 30-second stability window, it resets backoff at that point. An input received before the CCCD acknowledgment is buffered (latest value only) and forwarded only after subscription succeeds.
+Successful subscription alone does not prove input notifications are arriving. See [protocol evidence](protocol.md) for the UUIDs, report fields, and limitations.
 
-On failure, the session transitions to Reconnecting before retiring objects. Retirement increments a generation counter, cancels timers, disconnects signal handlers on scanner/controller, disposes the controller and its services, and clears pending operations. Every asynchronous callback checks its generation and relevant state. Only the single retry timer can start the next scan. Repeated failures do not enqueue additional attempts. Shutdown cancels that timer and cannot transition back to discovery.
+## Mouse processing and safety
 
-## Device identity and GATT
+After **12 stable, button-free input reports**, the joystick center is calibrated. `PointerMotion` applies a radial deadzone and nonlinear speed curve; it outputs relative X/Y movement. `TopButtonGesture` distinguishes a deferred short left click, a double click, holding the first press to drag, and holding the second press to scroll. During scroll, pointer movement is suppressed and `ScrollMotion` converts the Y axis into native wheel events. The joystick button independently controls the right mouse button.
 
-Every attempt scans for fresh `QBluetoothDeviceInfo`; persisted addresses are preferences, not reconstructed controller objects. Identity is an address when available, otherwise a device UUID. Explicit selection is exact after canonicalization. Automatic discovery recognizes the advertised name `Pokemon PBP` or the input service UUID. Neither is an authentication mechanism.
+One 16 ms timer drives motion and gesture deadlines only when required. A separate **500 ms input watchdog** resets calibration and releases all held mouse buttons if valid reports stop. Invalid reports and BLE input invalidation also clear mouse state. Held buttons are released when stopping or destroying the native output backend.
 
-The remembered identity wins when present. If absent, exactly one recognized candidate may replace it; the log makes that fallback visible. Ambiguity terminates with instructions to use `--device`. An explicit identity never falls back. Subscription success persists the selection; discovery alone does not.
+A Windows console handler requests a stop; the Qt event loop performs the mouse reset and BLE shutdown. For `CTRL_CLOSE_EVENT`, Windows allows a limited shutdown window, so the handler waits up to four seconds for Qt to finish. A forced process kill cannot guarantee a clean shutdown. These paths were tested with the physical controller, including closing a console window during a drag.
 
-Normal operation discovers only the known input service's details. Inspection visits every enumerated service sequentially. Both use `SkipValueDiscovery` to obtain metadata without automatic reads of unrelated proprietary values. Standard notification enablement is the only GATT write. Qt's [service API](https://doc.qt.io/qt-6/qlowenergyservice.html) documents these operations. Services and descriptors are recreated after each disconnect.
+## Deployment and other platforms
 
-## Output and future platforms
+The Windows release uses Qt Core, Qt Bluetooth, and `user32` for `SendInput`. A Release install packages `pokepointer.exe`, the two Qt DLLs, the versioned batch launcher, and documentation/license files. GitHub Actions runs the seven tests and builds the portable ZIP. See [Development and validation](development.md).
 
-The application forwards notifications only from the selected input characteristic. Invalid reports clear the last interpreted state; valid unchanged state is suppressed. Timestamp and motion-sensor bytes are excluded from `InputState`. Raw diagnostics show UTC timestamps, UUID, length and at most 512 bytes, with a ten-line-per-second cap. Suppression counts expose sampling; the mode is not a packet recorder.
-
-Linux will need validation against Qt's BlueZ backend. Android will need a launch/package layer, Bluetooth runtime permissions and lifecycle handling; these are not implemented. Platform-specific code currently exists only for graceful console interruption. No claim of Linux or Android runtime support is made merely because the core is portable.
+Linux and Android are not implemented targets in v1.0.0. Their future input-output backends and permissions must be validated separately; portability of the Qt-free core does not establish support for those systems.
