@@ -75,6 +75,16 @@ if(POKEPOINTER_BUILD_APP)
         install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/mouse.md"
                 DESTINATION "docs"
                 CONFIGURATIONS Release)
+        # Ship the application's MIT license separately from Qt's LGPLv3.
+        install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+                DESTINATION "."
+                CONFIGURATIONS Release)
+        install(FILES
+            "${CMAKE_CURRENT_SOURCE_DIR}/licenses/LGPL-3.0.txt"
+            "${CMAKE_CURRENT_SOURCE_DIR}/licenses/GPL-3.0.txt"
+            "${CMAKE_CURRENT_SOURCE_DIR}/licenses/QT-NOTICE.md"
+            DESTINATION "licenses"
+            CONFIGURATIONS Release)
     endif()
 
     if(BUILD_TESTING)

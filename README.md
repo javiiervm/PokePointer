@@ -26,7 +26,7 @@ PokePointer is a C++20 / Qt 6 application that uses a Nintendo Poké Ball Plus a
 - **Mouse safety:** initial center calibration, radial deadzone, speed curve, 500 ms input watchdog, button release on input invalidation and shutdown, and movement timer stopped at rest.
 - Qt-free tests for protocol/lifecycle/pointer mapping plus Qt offline and CLI tests.
 
-BLE discovery, GATT inspection, joystick decoding, mouse movement, left/right clicks, dragging, and the scrolling gesture were successfully tried with a physical Poké Ball Plus on Windows 11 on 2026-10-17. Seven tests passed in the MSVC Release build. **Recovery from unexpected Bluetooth loss, 15+ minute idle operation, elevated-app behavior, and the updated CI-built standalone distribution still require validation.** No proprietary keep-alive has been established. See [protocol evidence](docs/protocol.md) and [mouse validation](docs/mouse.md).
+BLE discovery, GATT inspection, joystick decoding, mouse movement, left/right clicks, dragging, and the scrolling gesture were successfully tried with a physical Poké Ball Plus on Windows 11 on 2026-10-17. Seven tests passed in the MSVC Release build. **Recovery from unexpected Bluetooth loss, 15+ minute idle operation, and elevated-app behavior still require validation.** The CI-built Windows ZIP was successfully tested on Windows 11 with the physical controller. No proprietary keep-alive has been established. See [protocol evidence](docs/protocol.md) and [mouse validation](docs/mouse.md).
 
 ## Build on Windows
 
@@ -110,14 +110,19 @@ The staged folder has this structure:
 PokePointer-v1.0.0-windows-x64/
   Start-PokePointer.bat
   README.md
+  LICENSE
   docs/mouse.md
+  licenses/
+    LGPL-3.0.txt
+    GPL-3.0.txt
+    QT-NOTICE.md
   bin/
     pokepointer.exe
     Qt6Core.dll
     Qt6Bluetooth.dll
 ```
 
-Double-click `Start-PokePointer.bat` to run `bin/pokepointer.exe --mouse`. The batch launcher works regardless of the installation directory and shows the exit code if the program fails. `Ctrl+C` in the console requests an orderly shutdown. **Closing the window with X requests orderly shutdown but remains subject to Windows console-close time limits**: the console handler waits up to four seconds for the Qt event loop to exit. Close-with-X behavior must be validated on real Windows; forced process termination cannot be handled.
+Double-click `Start-PokePointer.bat` to run `bin/pokepointer.exe --mouse`. The batch launcher works regardless of the installation directory and shows the exit code if the program fails. `Ctrl+C` in the console requests an orderly shutdown. **Closing the window with X requests orderly shutdown but remains subject to Windows console-close time limits**: the console handler waits up to four seconds for the Qt event loop to exit. Closing with X, including during dragging, was tested successfully on Windows 11. Forced process termination still cannot be handled.
 
 The `.github/workflows/windows-release.yml` workflow builds Release with MSVC, runs seven tests, stages the same distribution, checks for both Qt DLLs, and runs `pokepointer.exe --version` without the Qt development `bin` folder on `PATH`. A successful workflow run uploads a downloadable ZIP artifact. Tagged builds can publish the ZIP as a GitHub Release; do not tag until the package is verified.
 
@@ -128,7 +133,11 @@ cd dist
 cmake -E tar cf PokePointer-v1.0.0-windows-x64.zip --format=zip PokePointer-v1.0.0-windows-x64
 ```
 
-Compiler runtime DLLs are deliberately not copied. End users might need the **official Microsoft Visual C++ Redistributable x64**. Test the package on Windows without Qt installed (and without its `bin` directory on `PATH`) and verify Bluetooth and all mouse gestures. Review Qt's licensing notices and redistribution obligations before publishing. The repository has not yet selected an application license.
+Compiler runtime DLLs are deliberately not copied. End users might need the **official Microsoft Visual C++ Redistributable x64**. Test the package on Windows without Qt installed (and without its `bin` directory on `PATH`) and verify Bluetooth and all mouse gestures. PokePointer is MIT-licensed (`LICENSE`). The package includes the GNU LGPLv3 and GPLv3 texts and Qt notices under `licenses/`. Before public distribution, verify any additional notices required for third-party code inside the exact Qt DLL build; see `licenses/QT-NOTICE.md`.
+
+## Licensing
+
+PokePointer itself is distributed under the **MIT License**; see [`LICENSE`](LICENSE). The Windows binary dynamically links the **independently licensed Qt 6.12.0 Core and Bluetooth DLLs** under LGPLv3. The portable ZIP includes their LGPLv3/GPLv3 license texts, source-access information and additional attribution guidance in [`licenses/QT-NOTICE.md`](licenses/QT-NOTICE.md). The MIT license does not cover Qt or Qt third-party components.
 
 ## Project map
 
@@ -147,6 +156,6 @@ Compiler runtime DLLs are deliberately not copied. End users might need the **of
 
 ## Next milestone
 
-Validate the CI-built Windows ZIP without Qt installed, including all input gestures. Follow up with deliberate Bluetooth disconnection/reconnection, 15+ minute idle testing, and checks in elevated applications. Possible later improvements include configurable sensitivity and button mappings and Linux/Android backends. Gyroscope control is deferred.
+Complete the Qt third-party notice audit and publish v1.0.0 once the licensed release bundle is checked. Follow up with deliberate Bluetooth disconnection/reconnection, 15+ minute idle testing, and checks in elevated applications. Possible later improvements include configurable sensitivity and button mappings and Linux/Android backends. Gyroscope control is deferred.
 
-No project license has been selected. Dependency licenses remain their owners' terms.
+PokePointer is licensed under MIT. Qt and its included third-party components remain under their respective licenses.
